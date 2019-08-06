@@ -1,0 +1,510 @@
+---
+title: "Bike Share Data"
+author: "Christian Douchant"
+date: "30/06/2019"
+output: html_document
+---
+
+```{r setup, eval= TRUE, include=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+
+# Portion of code to add city name to each data set than combine them into one file for analysis using if/else section and a functiom.
+
+sq <- c(1:3)
+sq_nm <- c("ny","wash","chi")
+sqls <- list(sq,full.names=sq_nm)
+city <- character(length=10)
+
+x = NULL
+idx = 1
+ for (num in sq){
+   if (num < 4) {
+     if (num == 1) {
+        ny = read.csv('new-york-city.csv')  
+        city <- as.character(c("New York"))
+        ny <- data.frame(cbind(ny,city))}
+     else if (num == 2) {
+        wash = read.csv('washington.csv')  
+        city <- as.character(c("Washington"))
+        wash <- data.frame(cbind(wash,city))}
+     else if (num == 3) {
+        chi = read.csv('chicago.csv') 
+        city <- as.character(c("Chicago"))
+        chi <- data.frame(cbind(chi,city))}
+     
+      x[idx] = num
+   idx=num
+   idx = idx +1
+  }
+ }
+
+head(ny,10)
+head(wash,10)
+head(chi,10)
+
+```
+
+
+```{r setup and summaries, include=FALSE,  echo=FALSE }
+
+# adding blank columns for Washington data set to include Gender and Birth Year so that all three datasets can be appended into one in and city by city comparisons can be made for all the analysis forthcoming
+
+wash2 <- data.frame(wash, Gender=factor(c(1:300000)), Birth.Year=factor(c(1:300000)))
+
+wash2$Birth.Year <- as.numeric(wash2$Birth.Year, NaN)
+wash2$Birth.Year <- NA_real_
+wash2$Gender <- NA_character_
+
+data_all <- data.frame(rbind(ny,chi,wash2))
+
+head(data_all)
+
+# convert data and times using POSIXLT, data of week, month and duration period in hours 
+
+temp <- data_all
+
+temp$Start.Time <- as.character(temp$Start.Time)
+temp$End.Time <- as.character(temp$End.Time)
+
+temp$Start_Date <- as.POSIXlt(temp$Start.Time, format = "%Y-%m-%d %H:%M:%S")
+temp$End_Date <- as.POSIXlt(temp$End.Time, format = "%Y-%m-%d %H:%M:%S")
+temp$data_hrmin <- format(as.POSIXlt(temp$Start.Time, format = "%Y-%m-%d %H:%M:%S"), format="%H:%M")
+
+# Convert hour and min into integer scale for latter graphic interpretation
+temptd <- data.frame(table(temp$data_hrmin))
+
+# Number of minutes in a day 60*24 = 1440
+rn <- c(1:1440)
+temptd <- cbind(temptd,rn)
+tempnm <- c("data_hm","freq","hrmin")
+colnames(temptd) <- tempnm
+temptd2 <- subset(temptd, select=-c(freq))
+temptd2$data_hrmin <- as.character(temptd2$data_hm)
+temptd2 <- subset(temptd2, select = -c(data_hm))
+
+#Merge the new data_hrmin category for time-of-day into table for graphing
+temp <- merge(x=temp,y=temptd2, by="data_hrmin", all=TRUE)
+
+temp$data_dow <- as.factor(weekdays(temp$Start_Date))
+temp$data_month <- as.factor(format(temp$Start_Date, "%B"))
+
+#ny_hour <- format(as.POSIXct(ny$Start.Time, "%H:%M:%S"), "%H")
+temp$dura_days <- temp$Trip.Duration/(24*60*60)
+temp$dura_min <- temp$Trip.Duration/60
+
+temp$data_month <- factor(temp$data_month, levels = c("January","February","March","April","May","June"))
+
+temp$data_dow <- factor(temp$data_dow, levels = c("Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"))
+
+data_all_wdate <- data.frame(temp)
+                      
+rm(temp,temptd,temptd2,tempnm,rn)
+
+```
+## 1 Popular times of travel (i.e., occurs most often in the start time)
+
+### *What is the most common month?*
+
+Overall, the most common month is JUne, considering it is late spring and most of these cities in the more northern climate would expect higher ridership then (See Chart 1).  Also, this is the summer holidy period and we would expect more ridership to increase from April to June. 
+
+Interestingly, ridership in Chicago in the spring is much higher than the other two cities (See Chart 2).
+
+### *What is the most common day of week?*
+
+The most common day of the week for all cities is Wednesday - the peek business day of the week.  Interestingly, that changes by June during the late spring as the distrubiton is more flat as more holiday visitors use bikes anytime of the week - see Charts 3 and 4 including summary tables.
+
+### *What is the most common hour of day?*
+
+The most common of hour of the day overall is between 8 and 9 am in the morning for all cities.  A breakdwon of hours in a day by day of the week, shows this pattern is due to the usual workday (Mon to Friday) - pattern is two peeks for Morning and late afternoon.  The weekends (Saturday and Sunday) shows a rather more normal distributin with a peek at midday (See Charts 5 to #11)
+
+The pattern is the same for all cities.  Interestingly, Washington shows a complete drop of bicycle use in the springs, with no bike use after 1:00 pm. This could be due to restrictions for their use in the nation capital during the spring and summer months in the afternoon.
+
+```{r Group 1 Questions,  echo=FALSE}
+
+data_all_wdate$data_month <- factor(data_all_wdate$data_month, levels = c("January","February","March","April","May","June"))
+
+data_all_wdate$data_dow <- factor(data_all_wdate$data_dow, levels = c("Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"))
+
+data_all_wdate$data_monthint <- as.integer(data_all_wdate$data_month)
+data_all_wdate$data_dowint <- as.integer(data_all_wdate$data_dow)
+data_all_wdate <- data.frame(data_all_wdate)
+
+by(as.integer(data_all_wdate$data_month), data_all_wdate$city, summary)
+by(as.integer(data_all_wdate$data_dow), data_all_wdate$city, summary)
+
+ggplot(data_all_wdate, aes(x = as.integer(data_month), na.rm=TRUE))+
+  geom_bar( fill = "red")+
+  scale_x_continuous("# of Bike Rides Per Month", breaks = c(1:6), labels = c("Jan","Feb","Mar","Apr","May","Jun"))+
+  scale_y_continuous(labels = scales::comma)+
+  ggtitle("Number of Bike Riders used Per Month (Jan to June 2017) - Chart 1")+
+  theme(plot.title = element_text(hjust = 0.5, size = 12), 
+        axis.text.x = element_text(color = "black", size =8, hjust = 0.5), axis.text.y = element_text(color ="black", size = 8, hjust =0.5))
+
+table(data_all_wdate$data_month)
+
+ggplot(data_all_wdate, aes(x = as.integer(data_month), na.rm=TRUE))+
+  geom_bar(aes(fill=city), position = "dodge")+
+  scale_x_continuous("# of Bike Rides Per Month" ,breaks = 1:6 , labels = c("Jan","Feb","Mar","Apr","May","Jun"))+
+  scale_y_continuous(labels = scales::comma)+
+  ggtitle("Number of Bikes used Per Month by City (Jan to June 2017) - Chart 2" )+
+  theme(plot.title = element_text(hjust = 0.5, size = 12), 
+        axis.text.x = element_text(color = "black", size =8, hjust = 0.5), axis.text.y = element_text(color ="black", size = 8, hjust =0.5))
+
+by(data_all_wdate$data_month, data_all_wdate$city, summary)
+
+  
+ggplot(data_all_wdate, aes(x = as.integer(data_dow), na.rm=TRUE))+
+  geom_bar(fill = "purple")+
+  scale_x_continuous("# of Bike Rides Per Day of the Week", breaks = 1:7, labels = c("Sun","Mon","Tue","Wed","Thu","Fri","Sat"))+
+  scale_y_continuous(labels = scales::comma)+
+  ggtitle("Number of Bikes used per Day of the Week (Jan to June 2017)- Chart 3")+
+  theme(plot.title = element_text(hjust = 0.5, size = 11), 
+        axis.title.x.bottom = element_text(hjust = 0.5, size =11),
+        axis.text.x = element_text(color = "black", size = 7, hjust = 0.5, face="bold.italic", angle = 45), 
+        axis.text.y = element_text(color ="black", size = 8, hjust =0.5))
+
+by(data_all_wdate$data_dow, data_all_wdate$city, summary)
+
+ggplot(data_all_wdate, aes(x = as.integer(data_dow), na.rm=TRUE))+
+  geom_bar(fill = "purple")+
+  scale_x_continuous("# of Bike Rides Per Day of the Week", breaks = 1:7, labels = c("Sun","Mon","Tue","Wed","Thu","Fri","Sat"))+
+  scale_y_continuous(labels = scales::comma)+
+  facet_wrap(~data_month) +
+  ggtitle("Number of Bikes used per Day of the Week per Month (Jan to June 2017) - Chart 4")+
+  theme(plot.title = element_text(hjust = 0.5, size = 11), 
+        axis.title.x.bottom = element_text(hjust = 0.5, size =11),
+        axis.text.x = element_text(color = "black", size = 7, hjust = 0.5, face="bold.italic", angle = 45), 
+        axis.text.y = element_text(color ="black", size = 8, hjust =0.5))
+
+#What is the most common hour of day?
+
+ggplot(data_all_wdate, aes(x=as.numeric(hrmin), na.rm=TRUE), binwidth=50)+
+      geom_histogram(position = "stack", bins=100, 
+                     fill = "lightblue") + 
+  scale_x_continuous(limits = c(0,1500), breaks = seq(0,1500, 250))+
+  labs(x = "Hours-as Integers (12:00am to 11:59 pm) - Chart 5")+
+  ggtitle("Original Histogram Plot - Bike Use by Hour of the Day")+
+  theme(plot.title = element_text(hjust = 0.5, size = 11), 
+        axis.title.x.bottom = element_text(hjust = 0.5, size =11),
+        axis.text.x = element_text(color = "black", size = 7, hjust = 0.5,
+                                   face="bold.italic", angle = 45), 
+        axis.text.y = element_text(color ="black", size = 8, hjust =0.5))
+
+# Use of bins - 24 to represent 24 hours in day
+
+data_all_wdate$hrbin  <- cut(data_all_wdate$hrmin, breaks=24)
+
+ggplot(data_all_wdate, aes(x=as.integer(hrbin), na.rm=TRUE))+
+      geom_histogram(position = "stack",bins= 50, fill = "lightblue") + 
+  scale_x_continuous(limits = c(0,24), breaks = seq(0,24,1))+
+  labs(x = "Hours-as Integers (12:00am to 11:59 pm)")+
+  ggtitle("Histogram of Bike Use by Hour of the Day - Chart 6")+ 
+  theme(plot.title = element_text(hjust = 0.5, size = 11), 
+        axis.title.x.bottom = element_text(hjust = 0.5, size =11),
+        axis.text.x = element_text(color = "black", size = 7, hjust = 0.5,
+                                   face="bold.italic", angle = 45), 
+        axis.text.y = element_text(color ="black", size = 8, hjust =0.5))
+
+ggplot(data_all_wdate, aes(x=as.integer(hrbin), na.rm=TRUE))+
+      geom_histogram(position = "stack",bins= 50, fill = "lightblue") + 
+  scale_x_continuous(limits = c(0,24), breaks = seq(0,24,2))+
+  labs(x = "Hours-as Integers (12:00am to 11:59pm)")+
+  ggtitle("Histogram of Bike Use by Hour of the Day per Day of the Week - Chart 7")+
+   facet_wrap(.~data_dow)+ 
+  theme(plot.title = element_text(hjust = 0.5, size = 11), 
+        axis.title.x.bottom = element_text(hjust = 0.5, size =11),
+        axis.text.x = element_text(color = "black", size = 7, hjust = 0.5,
+                                   face="bold.italic", angle = 45), 
+        axis.text.y = element_text(color ="black", size = 8, hjust =0.5))
+
+ggplot(data_all_wdate, aes(x=as.integer(hrbin), na.rm=TRUE))+
+      geom_histogram(position = "stack",bins= 50, fill = "lightblue") + 
+  scale_x_continuous(limits = c(0,24), breaks = seq(0,24,2))+
+  labs(x = "Hours-as Integers (12:00am to 11:59pm)")+
+  ggtitle("Histogram of Bike Use by Hour of the Day per Month of the Year (Jan to June) - Chart 8")+
+   facet_wrap(.~data_month)+ 
+  theme(plot.title = element_text(hjust = 0.5, size = 11), 
+        axis.title.x.bottom = element_text(hjust = 0.5, size =11),
+        axis.text.x = element_text(color = "black", size = 7, hjust = 0.5,
+                                   face="bold.italic", angle = 45), 
+        axis.text.y = element_text(color ="black", size = 8, hjust =0.5))
+
+ggplot(data_all_wdate, aes(x=as.integer(hrbin), na.rm=TRUE))+
+      geom_histogram(position = "stack",bins= 50, fill = "lightblue") + 
+  scale_x_continuous(limits = c(0,24), breaks = seq(0,24,2))+
+  labs(x = "Hours-as Integers (12:00am to 11:59pm)")+
+  ggtitle("Histogram of Bike Use by Hour of the Day per Day of the Week - chart 9")+
+   facet_wrap(.~city)+ 
+  theme(plot.title = element_text(hjust = 0.5, size = 11), 
+        axis.title.x.bottom = element_text(hjust = 0.5, size =11),
+        axis.text.x = element_text(color = "black", size = 7, hjust = 0.5,
+                                   face="bold.italic", angle = 45), 
+        axis.text.y = element_text(color ="black", size = 8, hjust =0.5))
+
+ggplot(subset(data_all_wdate,city=="Washington"), aes(x=as.integer(hrbin), na.rm=TRUE))+
+      geom_histogram(position = "stack",bins= 50, fill = "lightblue") + 
+  scale_x_continuous(limits = c(0,24), breaks = seq(0,24,2))+
+  labs(x = "Hours-as Integers (12:00am to 11:59pm)")+
+  ggtitle("Histogram of Bike Use by Hour of the Day per Month of the Year (Jan to June) - Washington Chart 10")+
+   facet_wrap(data_month~city)+ 
+  theme(plot.title = element_text(hjust = 0.5, size = 9), 
+        axis.title.x.bottom = element_text(hjust = 0.5, size =11),
+        axis.text.x = element_text(color = "black", size = 7, hjust = 0.5,
+                                   face="bold.italic", angle = 45), 
+        axis.text.y = element_text(color ="black", size = 8, hjust =0.5)) 
+
+
+ggplot(subset(data_all_wdate,city=="New York"), aes(x=as.integer(hrbin), na.rm=TRUE))+
+      geom_histogram(position = "stack",bins= 50, fill = "lightblue") + 
+  scale_x_continuous(limits = c(0,24), breaks = seq(0,24,2))+
+  labs(x = "Hours-as Integers (12:00am to 11:59pm)")+
+  ggtitle("Histogram of Bike Use by Hour of the Day per Month of the Year (Jan to June) - New York Chart 11")+
+   facet_wrap(data_month~city)+ 
+  theme(plot.title = element_text(hjust = 0.5, size = 9), 
+        axis.title.x.bottom = element_text(hjust = 0.5, size =11),
+        axis.text.x = element_text(color = "black", size = 7, hjust = 0.5,
+                                   face="bold.italic", angle = 45), 
+        axis.text.y = element_text(color ="black", size = 8, hjust =0.5))
+
+ggplot(subset(data_all_wdate,city=="Chicago"), aes(x=as.integer(hrbin), na.rm=TRUE))+
+      geom_histogram(position = "stack",bins= 50, fill = "lightblue") + 
+  scale_x_continuous(limits = c(0,24), breaks = seq(0,24,2))+
+  labs(x = "Hours-as Integers (12:00am to 11:59pm)")+
+  ggtitle("Histogram of Bike Use by Hour of the Day per Month of the Year (Jan to June) - Chicago Chart 12")+
+   facet_wrap(data_month~city)+ 
+  theme(plot.title = element_text(hjust = 0.5, size = 9), 
+        axis.title.x.bottom = element_text(hjust = 0.5, size =11),
+        axis.text.x = element_text(color = "black", size = 7, hjust = 0.5,
+                                   face="bold.italic", angle = 45), 
+        axis.text.y = element_text(color ="black", size = 8, hjust =0.5))
+
+```
+
+## 2 Popular stations and trip
+
+### *What is the most common start station?*
+For New York City,Pershing Square North has the highest bike use (3061) for a Start Station even after removing low outlyers of less than 2 minutes. In Chicago, Streeter Dr & Grand Ave has the highest bike use at 6880, while for Washington it is Columbus Circle / Union Station at 5576.
+
+### *What is the most common end station?*
+
+For New York City,again it is Pershing Square North has the highest bike use (3071) for an End Station even after removing low outlyers of less than 2 minutes. In Chicago, Streeter Dr & Grand Ave has the highest bike use at 7480, while for Washington it is Columbus Circle / Union Station at 5978. 
+
+### *What is the most common trip from start to end (i.e., most frequent combination of start station and end station)?*
+
+In New York City, E 7 St & Avenue A & Cooper Square & E 7 St has the higher number of start and end destination combinations.  For all three cities, the top Start and End Stations make up the top start to end destination.
+
+```{r Group 2 Questions,  echo=FALSE}
+
+#initial graph to show wide distribution to remove any very small (less than 1 minute rides) to very large outliers
+
+ggplot(subset(data_all_wdate,dura_min < 60),aes(x=dura_min), na.rm=TRUE)+
+  geom_histogram(position="stack", color="blue", binwidth=2)+
+#  stat_bin(bins=1000)+
+  scale_x_continuous(limits = c(0,60), breaks = seq(0,60,2))+
+  labs(x= "Minutes per Ride")+
+  ggtitle("Frequency of Rides per Minute - All Cities Chart 11")+
+  theme(plot.title = element_text(hjust = 0.5, size = 11), 
+        axis.title.x.bottom = element_text(hjust = 0.5, size =11),
+        axis.text.x = element_text(color = "black", size = 7, hjust = 0.5,
+                                   face="bold.italic", angle = 45), 
+        axis.text.y = element_text(color ="black", size = 8, hjust =0.5))
+
+#Create a data subset from this data to short outliers
+
+data_all<- subset(data_all_wdate, dura_min >= 2)
+
+citynm <- c("New York","Chicago","Washington")
+
+stationview <- function(x){
+  
+dall <- data_all[data_all$city == x,]
+tst <- data.frame(table(dall$Start.Station))
+    colnames(tst) <- c("Start_Station","tst_freq")
+    tst2 <- tst[order(-tst$tst_freq),]
+tet <- data.frame(table(dall$End.Station))
+    colnames(tet) <- c("End_Station","tet_freq")
+    tet2 <- tet[order(-tet$tet_freq),]
+tat <- data.frame(table(dall$Start.Station,dall$End.Station))
+    colnames(tat) <- c("Start_Station", "End_Station", "tat_freq")
+    tat2 <- tat[order(-tat$tat_freq),]
+    tab <- data.frame(x,head(tst2,5),head(tet2,5),head(tat2,5))
+    
+    return(tab)
+}
+
+stationtab <- data.frame(lapply(citynm,stationview))
+View(stationtab)
+stationtab
+
+```
+
+## 3 Trip duration
+
+### *What is the total travel time for users in different cities?*
+
+Bike users in Washington had the most travel time on bikes with an accumulated 1717 hours from January to June of 2017, compared to 1248 hours in New York and 1299 hours in Chicago.
+
+### *What is the average travel time for users in different cities?*
+
+The average travel time for a bike user in Washington is 11.9 minutes from January to June of 2017.  Bike users in New York had a travel time of 10.2 minutes during this same period, while Chicago bike users average travel time was 11.3 minutes (Chart 12 and 13).  
+
+Duration of travels vary based on the time of month for all riders; in these more northern cities, we will tend to see more travel by riders and longer trips compared to the winter months (Chart 14).
+
+
+
+```{r r Group 3 Questions,  echo=FALSE}
+
+#Convert Trip.Duration (from Seconds to Minutes /60 - new field dura_min)
+
+tabdur <- by((data_all_wdate$dura_min/(60*60)),data_all_wdate$city, sum)
+tabdur
+
+by(data_all_wdate$dura_min,data_all_wdate$city, summary)
+
+dura_minbin  <- as.integer(cut(data_all_wdate$dura_min, c(-Inf,5, 10,15,20.25,30,35,40,45,Inf)))
+
+data_all_wdate$dura_minbin <- dura_minbin
+
+table(data_all_wdate$dura_minbin,data_all_wdate$city)
+
+ggplot(subset(data_all_wdate,dura_min < 60),aes(x=dura_min), na.rm=TRUE)+
+  geom_histogram(position="stack", fill="orange", color="grey")+
+  labs(x= "Dura. in Minutes")+
+  ggtitle("Duration of Rides per Minute - All Cities Chart 12")+
+  theme(plot.title = element_text(hjust = 0.5, size = 11), 
+        axis.title.x.bottom = element_text(hjust = 0.5, size =11),
+        axis.text.x = element_text(color = "black", size = 7, hjust = 0.5,
+                                   face="bold.italic", angle = 45), 
+        axis.text.y = element_text(color ="black", size = 8, hjust =0.5))
+
+ggplot(subset(data_all_wdate,dura_min < 40),aes(x=city,y=dura_min), na.rm=TRUE)+
+  geom_boxplot(position="dodge2", stat="boxplot", fill="green")+
+  labs(x= "Dura. in Minutes")+
+  ggtitle("Distribution of Duration of Rides in Minutes - Per City Chart 13")+
+  theme(plot.title = element_text(hjust = 0.5, size = 11), 
+        axis.title.x.bottom = element_text(hjust = 0.5, size =11),
+        axis.text.x = element_text(color = "black", size = 7, hjust = 0.5,
+                                   face="bold.italic", angle = 45), 
+        axis.text.y = element_text(color ="black", size = 8, hjust =0.5))
+
+ggplot(subset(data_all_wdate,dura_min < 60),aes(x=dura_min), na.rm=TRUE)+
+  geom_histogram(position="stack", fill="gold", color="grey", binwidth=5)+
+   scale_x_continuous(limits = c(0,60), breaks = seq(0,60,5))+
+  facet_wrap(.~data_month)+
+  labs(x= "Dura. in Minutes")+
+  ggtitle("Duration of Rides per Minute - All Cities by Month Chart 14")+
+  theme(plot.title = element_text(hjust = 0.5, size = 11), 
+        axis.title.x.bottom = element_text(hjust = 0.5, size =11),
+        axis.text.x = element_text(color = "black", size = 7, hjust = 0.5,
+                                   face="bold.italic", angle = 45), 
+        axis.text.y = element_text(color ="black", size = 8, hjust =0.5))
+
+data_all_wdate_mwsh <- subset(data_all_wdate, city %in% c("New York","Chicago"))
+data_all_wdate_mwsh2 <- subset(data_all_wdate_mwsh, Birth.Year > 1935 &  Birth.Year < 2005 & Gender != "")
+
+summary(data_all_wdate_mwsh2$Birth.Year, rm.na=TRUE)
+
+by(data_all_wdate_mwsh2$Birth.Year,data_all_wdate_mwsh2$Gender,summary)
+
+
+```
+
+## 4 User info
+
+### *What are the counts of each user type?*
+
+A quick table shows over 728,000 subscribers, 170,000 Customers, 1 Dependent? #and 692 that are not identified.
+
+### *What are the counts of each gender (only available for NYC and Chicago)?*
+
+In terms of gender, we have over 385,000 mailes for NYC and Chicago and 124,500 females identified.  
+
+### *What are the earliest, most recent, most common year of birth (only available #for NYC and Chicago)?*
+
+A simple summary table for all ages (controlling for outliers) shows the #median year of birth is 1983 (most common), the most recent is 2004 and the earliest is 1936.  The most common year of birt for femalies is 1984 and is 1982 for males, this confirmed by the summary table.  Chart 18 is a boxplot #and confirms the distribution idedntified in the summary table.
+
+To remove the outliers a graph was produce to show where outliers in terms of Histogram - see Chart 15.  There were births in the 1800 which is impossible but the tail really started around 1935 which would place the oldest rider at around 72 years of age (which is reasonable).
+
+
+```{r  Group 4 Questions,  echo=FALSE}
+
+tab_15 <- table(data_all_wdate$User.Type)
+tab_16 <- by(as.factor(data_all_wdate$User.Type), data_all_wdate$city, summary)
+
+by(as.factor(data_all_wdate_mwsh$User.Type), data_all_wdate_mwsh$Gender, summary)
+table(data_all_wdate_mwsh$Gender)
+
+gencity <- table(as.factor(data_all_wdate_mwsh$Gender),data_all_wdate_mwsh$User.Type,data_all_wdate_mwsh$city)
+gencity
+
+tab_15
+tab_16
+
+Chart_15 <- ggplot(data_all_wdate_mwsh, aes(x=Birth.Year,na.rm=TRUE))+
+  geom_histogram(position="stack", binwidth =2, fill="pink", color= "grey")+
+  scale_x_continuous(limits = c(1935,2005), breaks = seq(1935,2005,10))+
+  labs(x= "Year of Birth")+
+  ggtitle("Frequency of Year of Birth - All Cities Month Chart 15")+
+  theme(plot.title = element_text(hjust = 0.5, size = 11), 
+        axis.title.x.bottom = element_text(hjust = 0.5, size =11),
+        axis.text.x = element_text(color = "black", size = 7, hjust = 0.5,
+                                   face="bold.italic", angle = 45), 
+        axis.text.y = element_text(color ="black", size = 8, hjust =0.5))
+
+Chart_16 <- ggplot(data_all_wdate_mwsh, aes(x=Birth.Year,na.rm=TRUE))+
+  geom_histogram(position="stack", binwidth =5)+
+  scale_x_continuous(limits = c(1935,2005), breaks = seq(1935,2005,10))+
+  facet_wrap(city~data_all_wdate_mwsh$Gender)+
+  labs(x= "Year of Birth")+
+  ggtitle("Frequency of Year of Birth - All Cities Month  Chart 16")+
+  theme(plot.title = element_text(hjust = 0.5, size = 11), 
+        axis.title.x.bottom = element_text(hjust = 0.5, size =11),
+        axis.text.x = element_text(color = "black", size = 7, hjust = 0.5,
+                                   face="bold.italic", angle = 45), 
+        axis.text.y = element_text(color ="black", size = 8, hjust =0.5))
+Chart_15
+Chart_16
+
+#```{r table_ch17 , table_ch18, chart_17, chart_18, echo=TRUE}
+
+data_all_wdate_mwsh$agebin  <- as.integer(cut(data_all_wdate_mwsh$Birth.Year, 9))
+
+table(data_all_wdate_mwsh$agebin,data_all_wdate_mwsh$Gender,data_all_wdate_mwsh$city)
+
+table(data_all_wdate_mwsh$Birth.Year,data_all_wdate_mwsh$city)
+data_all_wdate_mwsh2 <- subset(data_all_wdate_mwsh, Birth.Year > 1935 &  Birth.Year < 2005 & Gender != "")
+
+table_ch17 <- summary(data_all_wdate_mwsh2$Birth.Year, rm.na=TRUE)
+
+table_ch18 <- by(data_all_wdate_mwsh2$Birth.Year,data_all_wdate_mwsh2$Gender,summary)
+
+chart_17 <- ggplot(subset(data_all_wdate_mwsh2, Gender != ""), aes(x=as.factor(Gender), y=Birth.Year, na.rm=TRUE))+
+  geom_boxplot(stat="boxplot", position="dodge2", fill="purple", color= "grey")+
+  scale_y_continuous(name="Birth Year", limits = c(1935,2005), breaks = seq(1935,2005,10))+
+  labs(x= "Gender")+
+  ggtitle("Distribution of Year of Birth of Bike Riders Chart 17")+
+  theme(plot.title = element_text(hjust = 0.5, size = 11), 
+        axis.title.x.bottom = element_text(hjust = 0.5, size =11),
+        axis.text.x = element_text(color = "black", size = 10, hjust = 0.5,
+                                   face="bold.italic"), 
+        axis.text.y = element_text(color ="black", size = 8, hjust =0.5))
+
+chart_18 <- ggplot(subset(data_all_wdate_mwsh2, Gender != ""), aes(x=as.factor(Gender), y=Birth.Year, na.rm=TRUE))+
+  geom_boxplot(stat="boxplot", position="dodge2")+
+  scale_y_continuous(name="Birth Year", limits = c(1935,2005), breaks = seq(1935,2005,10))+
+  labs(x= "Gender and City")+
+  ggtitle("Distribution of Year of Birth of Bike Riders Chart 18")+
+  theme(plot.title = element_text(hjust = 0.5, size = 11), 
+        axis.title.x.bottom = element_text(hjust = 0.5, size =11),
+        axis.text.x = element_text(color = "black", size = 10, hjust = 0.5,
+                                   face="bold.italic"), 
+        axis.text.y = element_text(color ="black", size = 8, hjust =0.5))+
+  facet_wrap(.~city)
+
+table_ch17 
+table_ch18
+chart_17
+chart_18
+
+```
